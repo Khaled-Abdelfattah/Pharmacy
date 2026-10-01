@@ -1,0 +1,143 @@
+@model PharmacySystem.Models.ViewModels.InventoryListVM
+@{
+    ViewData["Title"] = "Inventory";
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Inventory</h2>
+        <p class="page-subtitle">Manage products, stock levels, and categories</p>
+    </div>
+    <a href="/Inventory/Create" class="btn btn-success" id="btn-add-product">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        Add Product
+    </a>
+</div>
+
+<div class="page-body">
+
+    <!-- ── Search & Filter ────────────────────────────────────── -->
+    <form method="get" action="/Inventory">
+        <div class="search-filter-bar">
+            <div class="search-input-wrap" style="flex:1;">
+                <svg class="search-icon-sm" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" name="search" id="search" class="form-control" placeholder="Search by name or barcode…"
+                       value="@Model.Search" />
+            </div>
+            <select name="categoryId" id="categoryFilter" class="form-select" style="max-width:220px;" onchange="this.form.submit()">
+                <option value="">All Categories</option>
+                @foreach (var cat in Model.Categories)
+                {
+                    if (Model.SelectedCategoryId == cat.Id)
+                    {
+                        <option value="@cat.Id" selected="selected">@cat.Name</option>
+                    }
+                    else
+                    {
+                        <option value="@cat.Id">@cat.Name</option>
+                    }
+                }
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm" id="btn-search">Search</button>
+            @if (!string.IsNullOrEmpty(Model.Search) || Model.SelectedCategoryId.HasValue)
+            {
+                <a href="/Inventory" class="btn btn-ghost btn-sm" id="btn-clear-filter">Clear</a>
+            }
+        </div>
+    </form>
+
+    <!-- ── Inventory table ────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Products (@Model.Products.Count)</span>
+            <div style="display:flex;gap:12px;font-size:13px;flex-wrap:wrap;">
+                <span class="badge badge-danger">● Out of Stock: @Model.Products.Count(p => p.StockStatus == PharmacySystem.Models.ViewModels.StockStatus.OutOfStock)</span>
+                <span class="badge badge-warning">● Low Stock: @Model.Products.Count(p => p.StockStatus == PharmacySystem.Models.ViewModels.StockStatus.Low)</span>
+            </div>
+        </div>
+
+        @if (Model.Products.Count == 0)
+        {
+            <div class="empty-state" style="padding:50px 20px;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                <h3>No products found</h3>
+                <p>Try a different search or <a href="/Inventory/Create">add a new product</a></p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="data-table" id="inventory-table">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th>Barcode</th>
+                            <th>Stock</th>
+                            <th>Sell Price</th>
+                            <th>Expiry</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.Products)
+                        {
+                            <tr id="row-@p.Id">
+                                <td>
+                                    <strong>@p.Name</strong>
+                                    @if (p.CategoryId == 2)
+                                    {
+                                        <span class="badge badge-deficient" style="margin-left:8px;">⚠ Deficient</span>
+                                    }
+                                </td>
+                                <td><span class="text-muted" style="font-size:13px;">@p.CategoryName</span></td>
+                                <td><code style="font-size:12px;color:var(--color-text-muted);">@(p.Barcode ?? "—")</code></td>
+                                <td>
+                                    @if (p.StockStatus == PharmacySystem.Models.ViewModels.StockStatus.OutOfStock)
+                                    {
+                                        <span class="badge badge-danger">✕ Out of Stock</span>
+                                    }
+                                    else if (p.StockStatus == PharmacySystem.Models.ViewModels.StockStatus.Low)
+                                    {
+                                        <span class="badge badge-orange">⚠ Low: @p.QuantityInStock</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-success">@p.QuantityInStock</span>
+                                    }
+                                </td>
+                                <td class="fw-bold">ج.م @p.SellingPrice.ToString("N2")</td>
+                                <td>
+                                    @if (p.ExpiryDate.HasValue)
+                                    {
+                                        var expired = p.ExpiryDate.Value < DateOnly.FromDateTime(DateTime.Today);
+                                        var soonExpiry = !expired && p.ExpiryDate.Value < DateOnly.FromDateTime(DateTime.Today.AddDays(30));
+                                        <span class="@(expired ? "badge badge-danger" : soonExpiry ? "badge badge-warning" : "")">
+                                            @p.ExpiryDate.Value.ToString("dd MMM yyyy")
+                                            @if (expired) { <text> ✕</text> }
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div style="display:flex;gap:6px;">
+                                        <a href="/Inventory/Edit/@p.Id" class="btn btn-outline btn-sm" id="btn-edit-@p.Id">Edit</a>
+                                        <form method="post" action="/Inventory/Delete/@p.Id" style="display:inline;"
+                                              onsubmit="return confirm('Remove @Html.Raw(p.Name.Replace("'", "\\'")) from inventory?')">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-ghost btn-sm" id="btn-delete-@p.Id"
+                                                    style="color:var(--color-danger);border-color:var(--color-danger-light);">Delete</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,115 @@
+@model PharmacySystem.Models.ViewModels.OrderDetailVM
+@{
+    ViewData["Title"] = $"Order #{Model.Id}";
+    bool isPending = Model.Status == "Pending";
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Order #@Model.Id — @Model.SupplierName</h2>
+        <p class="page-subtitle">
+            Placed @Model.OrderDate.ToLocalTime().ToString("dd MMM yyyy HH:mm")
+            @if (!isPending && Model.ReceivedDate.HasValue)
+            {
+                <text> &bull; Received @Model.ReceivedDate.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm")</text>
+            }
+        </p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+        @if (isPending) {
+            <span class="badge badge-warning" style="font-size:13px;padding:6px 14px;">⏳ Pending</span>
+        } else {
+            <span class="badge badge-success" style="font-size:13px;padding:6px 14px;">✓ Received</span>
+        }
+        <a href="/Orders" class="btn btn-ghost btn-sm">← Back</a>
+    </div>
+</div>
+
+<div class="page-body">
+
+    @if (!string.IsNullOrEmpty(Model.Notes))
+    {
+        <div class="alert alert-info" style="margin-bottom:20px;">📝 @Model.Notes</div>
+    }
+
+    <!-- ── Items table with editable received qty ─────────────── -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Order Items</span>
+            @if (isPending)
+            {
+                <span class="text-muted" style="font-size:13px;">Edit received quantities before confirming receipt</span>
+            }
+        </div>
+
+        @if (isPending)
+        {
+            <div class="card-body">
+                <form method="post" action="/Orders/Receive/@Model.Id" id="receive-form">
+                    @Html.AntiForgeryToken()
+                    <div class="table-wrapper" style="margin-bottom:16px;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Product</th>
+                                    <th>Category</th>
+                                    <th class="text-right">Qty Ordered</th>
+                                    <th class="text-right">Qty Received</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @for (int i = 0; i < Model.Items.Count; i++)
+                                {
+                                    var item = Model.Items[i];
+                                    <tr>
+                                        <input type="hidden" name="receivedItems[@i].OrderItemId" value="@item.OrderItemId" />
+                                        <td><strong>@item.ProductName</strong></td>
+                                        <td><span class="text-muted" style="font-size:13px;">@item.CategoryName</span></td>
+                                        <td class="text-right">@item.QuantityOrdered</td>
+                                        <td class="text-right">
+                                            <input type="number" min="0" max="@(item.QuantityOrdered * 10)"
+                                                   class="form-control" style="width:90px;display:inline-block;text-align:center;"
+                                                   name="receivedItems[@i].QuantityReceived"
+                                                   value="@item.QuantityOrdered"
+                                                   id="recv-@item.OrderItemId" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <button type="submit" class="btn btn-success" id="btn-mark-received"
+                            onclick="return confirm('Mark this order as Received? Stock will be updated.')">
+                        ✅ Mark as Received &amp; Update Stock
+                    </button>
+                </form>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th class="text-right">Qty Ordered</th>
+                            <th class="text-right">Qty Received</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td><strong>@item.ProductName</strong></td>
+                                <td><span class="text-muted" style="font-size:13px;">@item.CategoryName</span></td>
+                                <td class="text-right">@item.QuantityOrdered</td>
+                                <td class="text-right fw-bold" style="color:var(--color-success);">@(item.QuantityReceived ?? 0)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

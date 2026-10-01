@@ -1,0 +1,115 @@
+@model PharmacySystem.Models.ViewModels.ShiftReportVM
+@{
+    ViewData["Title"] = "Shift Report";
+    var from  = (DateTime)ViewBag.FromLocal;
+    var to    = (DateTime)ViewBag.ToLocal;
+    var preset = (string)ViewBag.Preset;
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Shift Report</h2>
+        <p class="page-subtitle">Filter sales by date & time range for cash settlement</p>
+    </div>
+    <a href="/Sales" class="btn btn-primary btn-sm" id="btn-back-pos">← Back to POS</a>
+</div>
+
+<div class="page-body">
+
+    <!-- ── Filter bar ─────────────────────────────────────────── -->
+    <div class="card" style="margin-bottom:20px;">
+        <div class="card-body">
+            <form method="get" action="/Sales/Log" class="d-flex flex-wrap gap-2 align-center">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;flex:1;">
+                    <div>
+                        <label class="form-label" for="from">From</label>
+                        <input type="datetime-local" id="from" name="from" class="form-control"
+                               value="@from.ToString("yyyy-MM-ddTHH:mm")" style="width:195px;" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="to">To</label>
+                        <input type="datetime-local" id="to" name="to" class="form-control"
+                               value="@to.ToString("yyyy-MM-ddTHH:mm")" style="width:195px;" />
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="btn-filter" style="align-self:flex-end;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+                        Filter
+                    </button>
+                </div>
+                <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                    <a href="/Sales/Log?preset=today" class="btn @(preset=="today"?"btn-primary":"btn-ghost") btn-sm" id="btn-preset-today">Today</a>
+                    <a href="/Sales/Log?preset=yesterday" class="btn @(preset=="yesterday"?"btn-primary":"btn-ghost") btn-sm" id="btn-preset-yesterday">Yesterday</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Summary stats ──────────────────────────────────────── -->
+    <div class="stat-cards">
+        <div class="stat-card primary">
+            <div class="stat-card-label">Total Revenue</div>
+            <div class="stat-card-value">ج.م @Model.TotalAmount.ToString("N2")</div>
+            <div class="stat-card-sub">@from.ToString("dd MMM HH:mm") → @to.ToString("dd MMM HH:mm")</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-card-label">Invoices</div>
+            <div class="stat-card-value">@Model.InvoiceCount</div>
+            <div class="stat-card-sub">sales completed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-label">Units Sold</div>
+            <div class="stat-card-value">@Model.TotalUnitsSold</div>
+            <div class="stat-card-sub">items dispensed</div>
+        </div>
+        @if (Model.InvoiceCount > 0)
+        {
+            <div class="stat-card">
+                <div class="stat-card-label">Avg. per Invoice</div>
+                <div class="stat-card-value">ج.م @((Model.TotalAmount / Model.InvoiceCount).ToString("N2"))</div>
+                <div class="stat-card-sub">average sale value</div>
+            </div>
+        }
+    </div>
+
+    <!-- ── Sales table ────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Sales in Period</span>
+            <span class="text-muted" style="font-size:13px;">@Model.Sales.Count result(s)</span>
+        </div>
+        @if (Model.Sales.Count == 0)
+        {
+            <div class="empty-state" style="padding:40px 20px;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                <h3>No sales in this period</h3>
+                <p>Adjust the date range or select a preset above</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Date &amp; Time</th>
+                            <th>Items</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in Model.Sales)
+                        {
+                            <tr>
+                                <td><span class="badge badge-primary">#@s.SaleId</span></td>
+                                <td>@s.SaleDate.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                <td>@s.ItemCount unit(s)</td>
+                                <td class="text-right fw-bold">ج.م @s.TotalAmount.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

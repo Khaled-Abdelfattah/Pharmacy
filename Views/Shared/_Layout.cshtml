@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Pharmacy Management System — inventory, sales, orders and reporting." />
+    <title>@(ViewData["Title"] != null ? $"{ViewData["Title"]} — " : "")Pharmacy System</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+<div class="app-wrapper">
+
+    <!-- ── Sidebar ─────────────────────────────────────────────── -->
+    <aside class="sidebar" role="navigation" aria-label="Main navigation">
+        <div class="sidebar-brand">
+            <h1>💊 Pharmacy</h1>
+            <p>Management System</p>
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section-label">Operations</div>
+
+            <a class="sidebar-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Sales" && ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")"
+               href="/Sales" id="nav-sales">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                Sales / POS
+            </a>
+
+            <a class="sidebar-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Sales" && ViewContext.RouteData.Values["action"]?.ToString() == "Log" ? "active" : "")"
+               href="/Sales/Log" id="nav-log">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                Shift Report
+            </a>
+
+            <div class="nav-section-label">Inventory</div>
+
+            <a class="sidebar-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Inventory" ? "active" : "")"
+               href="/Inventory" id="nav-inventory">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                Inventory
+            </a>
+
+            <a class="sidebar-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Invoices" ? "active" : "")"
+               href="/Invoices/Daily" id="nav-invoices">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Daily Invoice
+            </a>
+
+            <a class="sidebar-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Orders" ? "active" : "")"
+               href="/Orders" id="nav-orders">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                Orders
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            v1.0 &bull; Offline Mode
+        </div>
+    </aside>
+
+    <!-- ── Main Content ─────────────────────────────────────────── -->
+    <div class="main-content">
+        @* Global flash messages *@
+        @if (TempData["Success"] != null)
+        {
+            <div class="alert alert-success fade-in" data-auto-dismiss style="margin: 16px 28px 0; border-radius: 8px;">
+                ✅ @TempData["Success"]
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="alert alert-danger fade-in" data-auto-dismiss style="margin: 16px 28px 0; border-radius: 8px;">
+                ⚠️ @TempData["Error"]
+            </div>
+        }
+
+        @RenderBody()
+    </div>
+</div>
+
+<script src="~/js/site.js"></script>
+<script src="~/js/barcode.js"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

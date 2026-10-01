@@ -1,0 +1,50 @@
+## .NET build outputs
+bin/
+obj/
+out/
+publish/
+
+## EF Core migrations temp
+*.db-shm
+*.db-wal
+
+## Sensitive config
+appsettings.Production.json
+
+## Visual Studio / Rider
+.vs/
+*.user
+*.suo
+*.sln.docstates
+.idea/
+*.DotSettings.user
+
+## OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## NuGet
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Logs
+*.log
+logs/
+
+## Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+## Publish output (keep publish/ out of repo — user generates it locally)
+publish/
+Output/
+
+## Antigravity IDE
+.gemini/

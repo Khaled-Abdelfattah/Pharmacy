@@ -1,0 +1,149 @@
+@model PharmacySystem.Models.ViewModels.ProductFormVM
+@{
+    ViewData["Title"] = "Add Product";
+    bool isEdit = Model.Id > 0;
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">@(isEdit ? "Edit Product" : "Add New Product")</h2>
+        <p class="page-subtitle">@(isEdit ? "Update product details and stock" : "Fill in the details to add a product to inventory")</p>
+    </div>
+    <a href="/Inventory" class="btn btn-ghost btn-sm">← Back to Inventory</a>
+</div>
+
+<div class="page-body">
+    <div class="card" style="max-width:700px;">
+        <div class="card-body">
+
+            @if (!string.IsNullOrEmpty(Model.Barcode) && !isEdit)
+            {
+                <div class="alert alert-info" style="margin-bottom:16px;">
+                    📷 Barcode <strong>@Model.Barcode</strong> was scanned but not found. Fill in the details to add it.
+                </div>
+            }
+
+            <form asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@(isEdit ? Model.Id : null)"
+                  method="post" id="product-form">
+                @Html.AntiForgeryToken()
+
+                <div class="form-row">
+                    <!-- Name -->
+                    <div class="form-group" style="grid-column:1/-1;">
+                        <label asp-for="Name" class="form-label"></label>
+                        <input asp-for="Name" class="form-control form-control-lg" id="field-name"
+                               placeholder="e.g. Paracetamol 500mg" autofocus />
+                        <span asp-validation-for="Name" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Barcode -->
+                    <div class="form-group">
+                        <label asp-for="Barcode" class="form-label"></label>
+                        <div style="display:flex;gap:8px;">
+                            <input asp-for="Barcode" class="form-control" id="field-barcode"
+                                   placeholder="Scan or type barcode (optional)" />
+                            <button type="button" class="btn btn-ghost btn-sm" id="btn-scan-barcode"
+                                    title="Place cursor here then scan barcode">
+                                📷 Scan
+                            </button>
+                        </div>
+                        <span asp-validation-for="Barcode" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Category -->
+                    <div class="form-group">
+                        <label asp-for="CategoryId" class="form-label"></label>
+                        <select asp-for="CategoryId" class="form-select" id="field-category">
+                            <option value="">— Select category —</option>
+                            @foreach (var cat in Model.Categories)
+                            {
+                                if (Model.CategoryId == cat.Id)
+                                {
+                                    <option value="@cat.Id" selected="selected">@cat.Name</option>
+                                }
+                                else
+                                {
+                                    <option value="@cat.Id">@cat.Name</option>
+                                }
+                            }
+                        </select>
+                        <span asp-validation-for="CategoryId" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Qty in stock -->
+                    <div class="form-group">
+                        <label asp-for="QuantityInStock" class="form-label"></label>
+                        <input asp-for="QuantityInStock" type="number" min="0" class="form-control" id="field-qty" />
+                        <span asp-validation-for="QuantityInStock" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Purchase Price -->
+                    <div class="form-group">
+                        <label asp-for="PurchasePrice" class="form-label"></label>
+                        <input asp-for="PurchasePrice" type="number" min="0" step="0.01" class="form-control" id="field-purchase" />
+                        <span asp-validation-for="PurchasePrice" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Selling Price -->
+                    <div class="form-group">
+                        <label asp-for="SellingPrice" class="form-label"></label>
+                        <input asp-for="SellingPrice" type="number" min="0" step="0.01" class="form-control" id="field-sell" />
+                        <span asp-validation-for="SellingPrice" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Expiry Date -->
+                    <div class="form-group">
+                        <label asp-for="ExpiryDate" class="form-label"></label>
+                        <input asp-for="ExpiryDate" type="date" class="form-control" id="field-expiry" />
+                        <span asp-validation-for="ExpiryDate" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Low-stock threshold -->
+                    <div class="form-group">
+                        <label asp-for="LowStockThreshold" class="form-label"></label>
+                        <input asp-for="LowStockThreshold" type="number" min="1" class="form-control" id="field-threshold" />
+                        <span asp-validation-for="LowStockThreshold" class="invalid-feedback" style="display:block;"></span>
+                        <small class="text-muted">Alert shown when stock falls to or below this number</small>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group" style="grid-column:1/-1;">
+                        <label asp-for="Notes" class="form-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="3" id="field-notes"
+                                  placeholder="Optional notes (storage conditions, prescription required, etc.)"></textarea>
+                        <span asp-validation-for="Notes" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:12px;margin-top:8px;">
+                    <button type="submit" class="btn btn-success" id="btn-save-product">
+                        ✅ @(isEdit ? "Save Changes" : "Add Product")
+                    </button>
+                    <a href="/Inventory" class="btn btn-ghost">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+// Scan-to-fill: when "Scan" button clicked, focus barcode field and listen for scanner
+document.getElementById('btn-scan-barcode')?.addEventListener('click', () => {
+    const barcodeField = document.getElementById('field-barcode');
+    barcodeField.focus();
+    barcodeField.select();
+});
+
+// Validate selling >= purchase price
+document.getElementById('product-form')?.addEventListener('submit', function(e) {
+    const sell = parseFloat(document.getElementById('field-sell').value);
+    const buy  = parseFloat(document.getElementById('field-purchase').value);
+    if (!isNaN(sell) && !isNaN(buy) && sell < buy) {
+        if (!confirm('Selling price is lower than purchase price. Continue anyway?')) {
+            e.preventDefault();
+        }
+    }
+});
+</script>
+}

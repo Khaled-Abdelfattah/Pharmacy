@@ -1,0 +1,410 @@
+@{
+    ViewData["Title"] = "Sales";
+    Layout = "_Layout";
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Sales — Point of Sale</h2>
+        <p class="page-subtitle">Scan barcode or search by name to add items</p>
+    </div>
+    <a href="/Sales/Log?preset=today" class="btn btn-ghost btn-sm" id="btn-view-log">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Today's Log
+    </a>
+</div>
+
+<div class="page-body">
+    <!-- Deficient warning banner (hidden by default, shown by JS) -->
+    <div id="deficient-warning" class="deficient-warning" style="display:none;">
+        ⚠️ <strong>Deficient Medicine in cart:</strong> This item is reserved for patients with a complete prescription.
+    </div>
+
+    <div class="pos-layout">
+
+        <!-- ── Left: Search + Item list ──────────────────────────── -->
+        <div>
+            <!-- Barcode / Search input -->
+            <div class="pos-search-bar" id="search-bar-wrapper">
+                <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <div class="autocomplete-container" style="flex:1; position:relative;">
+                    <input type="text" id="product-search"
+                           placeholder="Scan barcode or type product name…"
+                           autocomplete="off"
+                           aria-label="Search products"
+                           aria-autocomplete="list"
+                           aria-controls="autocomplete-dropdown" />
+                    <div class="autocomplete-dropdown" id="autocomplete-dropdown" role="listbox"></div>
+                </div>
+            </div>
+
+            <!-- Product search results / recently added feedback -->
+            <div id="added-feedback" style="display:none;" class="alert alert-success fade-in" data-auto-dismiss>
+                ✅ <span id="added-feedback-text"></span>
+            </div>
+        </div>
+
+        <!-- ── Right: Cart ────────────────────────────────────────── -->
+        <div class="cart-panel" id="cart-panel">
+            <div class="cart-header">
+                <span>🛒 Cart</span>
+                <span id="cart-count" class="badge badge-primary">0 items</span>
+            </div>
+
+            <div class="cart-items" id="cart-items">
+                <div class="empty-state" id="cart-empty">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.962-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                    <h3>Cart is empty</h3>
+                    <p>Scan a barcode or search above to add items</p>
+                </div>
+            </div>
+
+            <div class="cart-footer">
+                <div class="cart-total-row">
+                    <span class="cart-total-label">Total</span>
+                    <span class="cart-total-value" id="cart-total">ج.م 0.00</span>
+                </div>
+                <button class="btn btn-success" style="width:100%; justify-content:center; font-size:16px; padding:13px;"
+                        id="btn-complete-sale" disabled onclick="completeSale()">
+                    ✅ Complete Sale
+                </button>
+                <button class="btn btn-ghost btn-sm" style="width:100%; justify-content:center; margin-top:8px;"
+                        id="btn-clear-cart" onclick="clearCart()">
+                    🗑 Clear Cart
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden CSRF token for fetch calls -->
+@Html.AntiForgeryToken()
+
+@section Scripts {
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// POS Cart State
+// ═══════════════════════════════════════════════════════════════════
+const cart = [];   // { id, name, price, qty, stock, isDeficient }
+
+// ── Render helpers ────────────────────────────────────────────────
+function renderCart() {
+    const empty  = document.getElementById('cart-empty');
+    const list   = document.getElementById('cart-items');
+    const count  = document.getElementById('cart-count');
+    const total  = document.getElementById('cart-total');
+    const btn    = document.getElementById('btn-complete-sale');
+    const warn   = document.getElementById('deficient-warning');
+
+    // Remove old rows (keep empty-state div)
+    list.querySelectorAll('.cart-item').forEach(el => el.remove());
+
+    if (cart.length === 0) {
+        empty.style.display = '';
+        count.textContent = '0 items';
+        total.textContent = 'ج.م 0.00';
+        btn.disabled = true;
+        warn.style.display = 'none';
+        return;
+    }
+
+    empty.style.display = 'none';
+    let grandTotal = 0;
+    let hasDeficient = false;
+
+    cart.forEach((item, idx) => {
+        const lineTotal = item.price * item.qty;
+        grandTotal += lineTotal;
+        if (item.isDeficient) hasDeficient = true;
+
+        const row = document.createElement('div');
+        row.className = 'cart-item';
+        row.dataset.idx = idx;
+        row.innerHTML = `
+            <div class="cart-item-info">
+                <div class="cart-item-name">${escHtml(item.name)}</div>
+                <div class="cart-item-price">ج.م ${item.price.toFixed(2)} each
+                    ${item.isDeficient ? '<span class="badge badge-deficient" style="margin-left:6px;">⚠ Deficient</span>' : ''}
+                </div>
+            </div>
+            <div class="cart-item-qty">
+                <button class="qty-btn" onclick="changeQty(${idx},-1)" aria-label="Decrease quantity">−</button>
+                <input class="qty-input form-control" type="number" min="1" max="${item.stock}"
+                       value="${item.qty}" onchange="setQty(${idx},this.value)" style="width:50px;padding:3px;" />
+                <button class="qty-btn" onclick="changeQty(${idx},1)" aria-label="Increase quantity">+</button>
+            </div>
+            <div class="cart-item-total">ج.م ${lineTotal.toFixed(2)}</div>
+            <button class="cart-remove" onclick="removeItem(${idx})" aria-label="Remove">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        `;
+        list.appendChild(row);
+    });
+
+    const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
+    count.textContent = `${totalUnits} item${totalUnits !== 1 ? 's' : ''}`;
+    total.textContent = 'ج.م ' + grandTotal.toFixed(2);
+    btn.disabled = false;
+    warn.style.display = hasDeficient ? 'flex' : 'none';
+}
+
+function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+}
+
+// ── Cart operations ───────────────────────────────────────────────
+function addToCart(product) {
+    if (product.quantityInStock <= 0) {
+        showToast(`⚠ "${product.name}" is out of stock.`, 'danger');
+        return;
+    }
+
+    const existing = cart.find(i => i.id === product.id);
+    if (existing) {
+        if (existing.qty >= product.quantityInStock) {
+            showToast(`⚠ Only ${product.quantityInStock} units available for "${product.name}".`, 'warning');
+            return;
+        }
+        existing.qty++;
+    } else {
+        cart.push({
+            id: product.id,
+            name: product.name,
+            price: product.sellingPrice,
+            qty: 1,
+            stock: product.quantityInStock,
+            isDeficient: product.isDeficient
+        });
+    }
+
+    renderCart();
+    showAddedFeedback(product.name);
+    focusSearch();
+}
+
+function changeQty(idx, delta) {
+    const item = cart[idx];
+    if (!item) return;
+    const newQty = item.qty + delta;
+    if (newQty <= 0) { removeItem(idx); return; }
+    if (newQty > item.stock) {
+        showToast(`Max available: ${item.stock}`, 'warning');
+        return;
+    }
+    item.qty = newQty;
+    renderCart();
+}
+
+function setQty(idx, val) {
+    const item = cart[idx];
+    if (!item) return;
+    const qty = parseInt(val, 10);
+    if (isNaN(qty) || qty <= 0) { removeItem(idx); return; }
+    if (qty > item.stock) {
+        showToast(`Max available: ${item.stock}`, 'warning');
+        item.qty = item.stock;
+    } else {
+        item.qty = qty;
+    }
+    renderCart();
+}
+
+function removeItem(idx) {
+    cart.splice(idx, 1);
+    renderCart();
+}
+
+function clearCart() {
+    if (cart.length > 0 && !confirm('Clear all items from cart?')) return;
+    cart.length = 0;
+    renderCart();
+}
+
+function showAddedFeedback(name) {
+    const fb = document.getElementById('added-feedback');
+    const txt = document.getElementById('added-feedback-text');
+    txt.textContent = `"${name}" added to cart`;
+    fb.style.display = 'flex';
+    clearTimeout(fb._timer);
+    fb._timer = setTimeout(() => { fb.style.display = 'none'; }, 2500);
+}
+
+// ── Complete Sale ─────────────────────────────────────────────────
+async function completeSale() {
+    if (cart.length === 0) return;
+
+    const btn = document.getElementById('btn-complete-sale');
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+
+    const payload = {
+        items: cart.map(i => ({ productId: i.id, quantity: i.qty }))
+    };
+
+    try {
+        const res = await fetch('/Sales/Create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': getAntiForgeryToken()
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            showToast(`Sale #${data.saleId} completed! Total: ج.م ${cart.reduce((s,i)=>s+i.price*i.qty,0).toFixed(2)}`, 'success');
+            cart.length = 0;
+            renderCart();
+        } else {
+            showToast(data.message || 'Sale failed.', 'danger');
+        }
+    } catch (err) {
+        showToast('Network error. Please try again.', 'danger');
+    } finally {
+        btn.disabled = cart.length === 0;
+        btn.innerHTML = '✅ Complete Sale';
+        focusSearch();
+    }
+}
+
+// ── Autocomplete ──────────────────────────────────────────────────
+const searchInput    = document.getElementById('product-search');
+const dropdown       = document.getElementById('autocomplete-dropdown');
+let acResults        = [];
+let acFocusIdx       = -1;
+let acDebounce       = null;
+
+searchInput.addEventListener('input', () => {
+    clearTimeout(acDebounce);
+    const val = searchInput.value.trim();
+    if (val.length < 1) { hideDropdown(); return; }
+    acDebounce = setTimeout(() => fetchAutocomplete(val), 180);
+});
+
+searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveFocus(1); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); moveFocus(-1); }
+    else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (acFocusIdx >= 0 && acResults[acFocusIdx]) {
+            selectProduct(acResults[acFocusIdx]);
+        } else if (searchInput.value.trim()) {
+            // Treat as potential barcode manual entry
+            checkBarcode(searchInput.value.trim());
+        }
+    } else if (e.key === 'Escape') {
+        hideDropdown();
+    }
+});
+
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#search-bar-wrapper')) hideDropdown();
+});
+
+async function fetchAutocomplete(term) {
+    try {
+        const res = await fetch(`/Sales/Autocomplete?term=${encodeURIComponent(term)}`);
+        acResults = await res.json();
+        renderDropdown();
+    } catch { hideDropdown(); }
+}
+
+function renderDropdown() {
+    acFocusIdx = -1;
+    if (acResults.length === 0) { hideDropdown(); return; }
+
+    dropdown.innerHTML = acResults.map((p, i) => `
+        <div class="autocomplete-item" role="option" data-idx="${i}">
+            <div>
+                <div class="autocomplete-item-name">${escHtml(p.name)}</div>
+                <div class="autocomplete-item-meta">
+                    ${p.barcode ? `Barcode: ${p.barcode} &bull; ` : ''}
+                    ${p.categoryName}
+                    ${p.isDeficient ? ' &bull; <span style="color:#C2410C;font-weight:700;">⚠ Deficient</span>' : ''}
+                </div>
+            </div>
+            <div style="text-align:right;">
+                <div class="autocomplete-item-price">ج.م ${p.sellingPrice.toFixed(2)}</div>
+                <div class="${p.quantityInStock === 0 ? 'autocomplete-item-stock-zero' : p.quantityInStock <= 5 ? 'autocomplete-item-stock-low' : 'autocomplete-item-stock-ok'}">
+                    ${p.quantityInStock === 0 ? '✕ Out of stock' : `${p.quantityInStock} in stock`}
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+        el.addEventListener('mousedown', (e) => { e.preventDefault(); selectProduct(acResults[i]); });
+        el.addEventListener('mouseover', () => { acFocusIdx = i; highlightFocus(); });
+    });
+
+    dropdown.classList.add('visible');
+}
+
+function moveFocus(delta) {
+    acFocusIdx = Math.max(-1, Math.min(acResults.length - 1, acFocusIdx + delta));
+    highlightFocus();
+}
+
+function highlightFocus() {
+    dropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => {
+        el.classList.toggle('focused', i === acFocusIdx);
+    });
+}
+
+function hideDropdown() {
+    dropdown.classList.remove('visible');
+    dropdown.innerHTML = '';
+    acResults = [];
+    acFocusIdx = -1;
+}
+
+function selectProduct(product) {
+    addToCart(product);
+    searchInput.value = '';
+    hideDropdown();
+}
+
+// ── Barcode scanner integration ───────────────────────────────────
+async function checkBarcode(code) {
+    try {
+        const res = await fetch(`/Sales/BarcodeCheck?barcode=${encodeURIComponent(code)}`);
+        const data = await res.json();
+        if (data.found) {
+            addToCart(data);
+            searchInput.value = '';
+            hideDropdown();
+        } else {
+            // Unknown barcode — redirect to create product with barcode prefilled
+            if (confirm(`Barcode "${code}" not found. Add as new product?`)) {
+                window.location.href = `/Inventory/Create?barcode=${encodeURIComponent(code)}`;
+            } else {
+                searchInput.value = '';
+                focusSearch();
+            }
+        }
+    } catch {
+        showToast('Could not look up barcode.', 'danger');
+    }
+}
+
+// ── Barcode scanner listener ──────────────────────────────────────
+BarcodeScanner.init({
+    onScanned: (barcode) => {
+        checkBarcode(barcode);
+    }
+});
+
+function focusSearch() {
+    searchInput.focus();
+    searchInput.select();
+}
+
+// Auto-focus search on load
+document.addEventListener('DOMContentLoaded', () => {
+    focusSearch();
+});
+</script>
+}

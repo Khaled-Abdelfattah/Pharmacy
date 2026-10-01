@@ -1,0 +1,181 @@
+@model PharmacySystem.Models.ViewModels.DailyInvoiceVM
+@{
+    ViewData["Title"] = "Daily Invoice";
+    var dateStr = Model.Date.ToString("yyyy-MM-dd");
+}
+
+<div class="page-header no-print">
+    <div>
+        <h2 class="page-title">Daily Invoice</h2>
+        <p class="page-subtitle">Summary of all items sold on a selected date</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" id="btn-export-pdf" onclick="exportPdf()">
+            📄 Export PDF
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btn-export-excel" onclick="exportExcel()">
+            📊 Export Excel
+        </button>
+    </div>
+</div>
+
+<div class="page-body">
+
+    <!-- ── Date picker ────────────────────────────────────────── -->
+    <form method="get" action="/Invoices/Daily" class="d-flex gap-2 align-center no-print" style="margin-bottom:20px;">
+        <label class="form-label" for="date" style="white-space:nowrap;margin-bottom:0;">Select Date:</label>
+        <input type="date" id="date" name="date" class="form-control" style="max-width:200px;"
+               value="@dateStr" />
+        <button type="submit" class="btn btn-primary btn-sm" id="btn-load-invoice">Load</button>
+    </form>
+
+    <!-- ── Summary stats ──────────────────────────────────────── -->
+    <div class="stat-cards">
+        <div class="stat-card primary">
+            <div class="stat-card-label">Total Revenue</div>
+            <div class="stat-card-value">ج.م @Model.TotalAmount.ToString("N2")</div>
+            <div class="stat-card-sub">@Model.Date.ToString("dddd, dd MMMM yyyy")</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-card-label">Invoices</div>
+            <div class="stat-card-value">@Model.TotalInvoices</div>
+            <div class="stat-card-sub">sales completed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-label">Units Sold</div>
+            <div class="stat-card-value">@Model.TotalUnitsSold</div>
+            <div class="stat-card-sub">items dispensed</div>
+        </div>
+    </div>
+
+    <!-- ── Invoice table ──────────────────────────────────────── -->
+    <div class="card" id="invoice-table-card">
+        <div class="card-header">
+            <span class="card-title">Sold Items — @Model.Date.ToString("dd MMMM yyyy")</span>
+        </div>
+
+        @if (Model.Lines.Count == 0)
+        {
+            <div class="empty-state" style="padding:40px 20px;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <h3>No sales on this date</h3>
+                <p>Select a different date to view its invoice</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="data-table" id="daily-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Product Name</th>
+                            <th>Category</th>
+                            <th class="text-right">Unit Price</th>
+                            <th class="text-right">Quantity</th>
+                            <th class="text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ int n = 1; }
+                        @foreach (var l in Model.Lines)
+                        {
+                            <tr>
+                                <td class="text-muted">@n</td>
+                                <td><strong>@l.ProductName</strong></td>
+                                <td><span class="text-muted" style="font-size:13px;">@l.CategoryName</span></td>
+                                <td class="text-right">ج.م @l.UnitPrice.ToString("N2")</td>
+                                <td class="text-right fw-bold">@l.TotalQuantity</td>
+                                <td class="text-right fw-bold" style="color:var(--color-success);">ج.م @l.LineTotal.ToString("N2")</td>
+                            </tr>
+                            n++;
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr style="background:var(--color-primary-bg);font-weight:700;">
+                            <td colspan="4" style="padding:12px 16px;text-align:right;color:var(--color-primary-dark);">Grand Total</td>
+                            <td style="padding:12px 16px;text-align:right;">@Model.TotalUnitsSold</td>
+                            <td style="padding:12px 16px;text-align:right;color:var(--color-success);font-size:16px;">ج.م @Model.TotalAmount.ToString("N2")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/lib/jspdf.umd.min.js"></script>
+<script src="~/lib/xlsx.full.min.js"></script>
+<script>
+const invoiceData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model));
+
+function exportPdf() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const date = invoiceData.date;
+    const lines = invoiceData.lines || [];
+
+    // Header
+    doc.setFontSize(18);
+    doc.setTextColor(2, 132, 199);
+    doc.text('Pharmacy — Daily Invoice', 14, 18);
+    doc.setFontSize(11);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Date: ${date}`, 14, 26);
+    doc.text(`Total Revenue: EGP ${invoiceData.totalAmount.toFixed(2)}  |  Invoices: ${invoiceData.totalInvoices}  |  Units: ${invoiceData.totalUnitsSold}`, 14, 32);
+
+    // Table headers
+    doc.setFontSize(10);
+    doc.setTextColor(2, 132, 199);
+    let y = 42;
+    doc.text('#', 14, y);
+    doc.text('Product', 22, y);
+    doc.text('Category', 100, y);
+    doc.text('Unit Price', 140, y);
+    doc.text('Qty', 162, y);
+    doc.text('Total', 175, y);
+    doc.setDrawColor(186, 230, 253);
+    doc.line(14, y + 2, 196, y + 2);
+    y += 8;
+
+    doc.setTextColor(30, 41, 59);
+    lines.forEach((l, i) => {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.text(String(i + 1), 14, y);
+        doc.text(l.productName.substring(0, 32), 22, y);
+        doc.text(l.categoryName.substring(0, 18), 100, y);
+        doc.text(`EGP ${l.unitPrice.toFixed(2)}`, 140, y);
+        doc.text(String(l.totalQuantity), 162, y);
+        doc.text(`EGP ${l.lineTotal.toFixed(2)}`, 175, y);
+        y += 7;
+    });
+
+    // Footer total
+    doc.setDrawColor(186, 230, 253);
+    doc.line(14, y, 196, y);
+    y += 5;
+    doc.setFontSize(11);
+    doc.setTextColor(22, 163, 74);
+    doc.text(`Grand Total: EGP ${invoiceData.totalAmount.toFixed(2)}`, 140, y, { align: 'left' });
+
+    doc.save(`invoice_${date}.pdf`);
+}
+
+function exportExcel() {
+    const wb = XLSX.utils.book_new();
+    const lines = (invoiceData.lines || []).map((l, i) => ({
+        '#': i + 1,
+        'Product': l.productName,
+        'Category': l.categoryName,
+        'Unit Price (EGP)': l.unitPrice,
+        'Quantity': l.totalQuantity,
+        'Total (EGP)': l.lineTotal
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(lines);
+    XLSX.utils.book_append_sheet(wb, ws, 'Daily Invoice');
+    XLSX.writeFile(wb, `invoice_${invoiceData.date}.xlsx`);
+}
+</script>
+}

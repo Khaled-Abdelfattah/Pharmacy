@@ -1,0 +1,198 @@
+@model PharmacySystem.Models.ViewModels.CreateOrderVM
+@using PharmacySystem.Models.Entities
+@{
+    ViewData["Title"] = "New Order";
+    var products   = (ViewBag.Products   as List<Product>)   ?? new List<Product>();
+    var categories = (ViewBag.Categories as List<Category>)  ?? new List<Category>();
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">New Procurement Order</h2>
+        <p class="page-subtitle">Record a bulk order from a pharmaceutical supplier</p>
+    </div>
+    <a href="/Orders" class="btn btn-ghost btn-sm">← Back</a>
+</div>
+
+<div class="page-body">
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;">
+
+        <!-- ── Left: order details ────────────────────────────── -->
+        <div class="card">
+            <div class="card-body">
+                <form method="post" action="/Orders/Create" id="order-form">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="itemsJson" id="items-json" />
+
+                    <!-- Supplier -->
+                    <div class="form-group">
+                        <label asp-for="SupplierName" class="form-label"></label>
+                        <input asp-for="SupplierName" class="form-control" id="field-supplier"
+                               placeholder="e.g. Al Hayah Medical Supplies" autofocus />
+                        <span asp-validation-for="SupplierName" class="invalid-feedback" style="display:block;"></span>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group">
+                        <label asp-for="Notes" class="form-label"></label>
+                        <textarea asp-for="Notes" class="form-control" rows="2" id="field-notes"
+                                  placeholder="Optional notes about this order…"></textarea>
+                    </div>
+
+                    <!-- Product picker tabs by category -->
+                    <div class="form-group">
+                        <label class="form-label">Add Products</label>
+                        <div id="order-tabs">
+                            <div class="tab-bar">
+                                @foreach (var cat in categories)
+                                {
+                                    <button type="button" class="tab-btn" data-tab="cat-@cat.Id" id="tab-cat-@cat.Id">@cat.Name</button>
+                                }
+                            </div>
+
+                            @foreach (var cat in categories)
+                            {
+                                <div class="tab-panel" data-tab="cat-@cat.Id">
+                                    <div style="max-height:280px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius-sm);">
+                                        @{
+                                            var catProducts = products.Where(p => p.CategoryId == cat.Id).ToList();
+                                        }
+                                        @if (!catProducts.Any())
+                                        {
+                                            <div style="padding:20px;text-align:center;color:var(--color-text-muted);font-size:14px;">No products in this category</div>
+                                        }
+                                        else
+                                        {
+                                            foreach (var p in catProducts)
+                                            {
+                                                var safeName = System.Text.Json.JsonSerializer.Serialize(p.Name);
+                                                <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--color-border);font-size:14px;">
+                                                    <div>
+                                                        <strong>@p.Name</strong>
+                                                        <span class="text-muted" style="font-size:12px;margin-left:8px;">Stock: @p.QuantityInStock</span>
+                                                    </div>
+                                                    <button type="button" class="btn btn-outline btn-sm"
+                                                            data-pid="@p.Id"
+                                                            data-pname="@p.Name"
+                                                            onclick="addOrderItem(this)"
+                                                            id="add-prod-@p.Id">
+                                                        + Add
+                                                    </button>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success" id="btn-submit-order" onclick="prepareSubmit()">
+                        ✅ Create Order
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── Right: order cart ──────────────────────────────── -->
+        <div class="card" style="position:sticky;top:24px;">
+            <div class="card-header">
+                <span class="card-title">Order Items</span>
+                <span id="order-count" class="badge badge-primary">0</span>
+            </div>
+            <div id="order-items" style="padding:0;">
+                <div id="order-empty" class="empty-state" style="padding:30px 20px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                    </svg>
+                    <h3>No items yet</h3>
+                    <p>Add products from the left panel</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+const orderItems = {};
+
+function addOrderItem(btn) {
+    const id   = parseInt(btn.dataset.pid, 10);
+    const name = btn.dataset.pname;
+    if (orderItems[id]) {
+        orderItems[id].qty++;
+    } else {
+        orderItems[id] = { id, name, qty: 1 };
+    }
+    renderOrderItems();
+}
+
+function changeOrderQty(id, delta) {
+    if (!orderItems[id]) return;
+    orderItems[id].qty = Math.max(1, orderItems[id].qty + delta);
+    renderOrderItems();
+}
+
+function removeOrderItem(id) {
+    delete orderItems[id];
+    renderOrderItems();
+}
+
+function renderOrderItems() {
+    const container = document.getElementById('order-items');
+    const empty     = document.getElementById('order-empty');
+    const count     = document.getElementById('order-count');
+    const keys      = Object.keys(orderItems);
+
+    container.querySelectorAll('.order-item-row').forEach(el => el.remove());
+
+    if (keys.length === 0) {
+        empty.style.display = '';
+        count.textContent = '0';
+        return;
+    }
+
+    empty.style.display = 'none';
+    count.textContent = keys.length;
+
+    keys.forEach(id => {
+        const item = orderItems[id];
+        const row  = document.createElement('div');
+        row.className = 'order-item-row';
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--color-border);font-size:14px;';
+
+        const nameEl = document.createElement('div');
+        nameEl.style.cssText = 'flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        nameEl.textContent = item.name;
+
+        const controls = document.createElement('div');
+        controls.style.cssText = 'display:flex;align-items:center;gap:6px;';
+        controls.innerHTML = `
+            <button type="button" class="qty-btn" onclick="changeOrderQty(${id},-1)">&#8722;</button>
+            <span style="font-weight:700;min-width:30px;text-align:center;">${item.qty}</span>
+            <button type="button" class="qty-btn" onclick="changeOrderQty(${id},1)">+</button>
+            <button type="button" class="cart-remove" onclick="removeOrderItem(${id})">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        `;
+
+        row.appendChild(nameEl);
+        row.appendChild(controls);
+        container.appendChild(row);
+    });
+}
+
+function prepareSubmit() {
+    const items = Object.values(orderItems).map(i => ({
+        productId: i.id,
+        quantityOrdered: i.qty
+    }));
+    document.getElementById('items-json').value = JSON.stringify(items);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initTabs('#order-tabs');
+});
+</script>
+}
